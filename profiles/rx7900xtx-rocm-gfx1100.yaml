@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "lane_id": "rx7900xtx-rocm-gfx1100",
+  "stack_id": "linux-amd-rx7900xtx-rocm-gfx1100",
+  "label": "RX 7900 XTX (ROCm gfx1100)",
+  "source": {
+    "mirror_url": "https://github.com/xrigpc/llama.cpp.git",
+    "upstream_url": "https://github.com/ggml-org/llama.cpp.git",
+    "commit": "60addddf3c567c43ec3caf70fc953fba3572d96f"
+  },
+  "platform": { "os": "ubuntu-24.04", "arch": "x86_64" },
+  "therock": {
+    "version": "7.14.0a20260612",
+    "url": "https://rocm.nightlies.amd.com/tarball/therock-dist-linux-gfx110X-all-7.14.0a20260612.tar.gz",
+    "size_bytes": 3788461914,
+    "sha256": "3510840436ff3dfcfa38a1b507568356c8c00b574e14f70cfbf46704dec7d788"
+  },
+  "cmake": {
+    "GGML_HIP": "ON", "AMDGPU_TARGETS": "gfx1100", "GGML_HIP_GRAPHS": "ON",
+    "GGML_HIP_NO_VMM": "ON", "GGML_HIP_MMQ_MFMA": "ON", "GGML_HIP_ROCWMMA_FATTN": "ON",
+    "GGML_OPENMP": "ON", "BUILD_SHARED_LIBS": "ON", "CMAKE_BUILD_TYPE": "Release",
+    "GGML_NATIVE": "OFF", "CMAKE_SKIP_RPATH": "ON"
+  },
+  "asset_prefix": "xrig-llama-server-linux-amd-rx7900xtx-rocm-gfx1100",
+  "qualification_command": "tests/qualify-rx7900xtx.sh"
+}

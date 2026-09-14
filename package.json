@@ -1,0 +1,5 @@
+{
+  "name": "xrig-llama-server-releases",
+  "private": true,
+  "scripts": { "test": "node tests/profile.test.js" }
+}

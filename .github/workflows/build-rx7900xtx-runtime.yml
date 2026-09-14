@@ -1,0 +1,48 @@
+name: Build & Release — RX 7900 XTX (ROCm gfx1100)
+on:
+  workflow_dispatch:
+    inputs:
+      llama_commit: { description: Exact approved 40-character SHA, required: true, type: string }
+      release_revision: { description: Positive immutable release integer, required: true, type: string }
+      github_release_tag: { description: Readable generated release tag, required: true, type: string }
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64, rx7900xtx]
+    environment: production
+    permissions: { contents: write }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate inputs and candidate name
+        env: { COMMIT: ${{ inputs.llama_commit }}, REVISION: ${{ inputs.release_revision }}, TAG: ${{ inputs.github_release_tag }} }
+        run: |
+          set -euo pipefail
+          [[ "$COMMIT" =~ ^[a-f0-9]{40}$ && "$REVISION" =~ ^[1-9][0-9]*$ ]]
+          expected="rx7900xtx-rocm-gfx1100-llama-${COMMIT:0:12}-rocm-7.14.0a20260612-v${REVISION}"
+          [[ "$TAG" == "$expected" ]] || { echo "tag must be $expected" >&2; exit 1; }
+      - name: Clone verified clean mirror checkout
+        env: { COMMIT: ${{ inputs.llama_commit }} }
+        run: git clone https://github.com/xrigpc/llama.cpp.git llama.cpp && git -C llama.cpp checkout --detach "$COMMIT"
+      - name: Build, package, receipt, and signatures
+        env:
+          XRIG_ED25519_PRIVATE_KEY_B64: ${{ secrets.XRIG_ED25519_PRIVATE_KEY_B64 }}
+          COMMIT: ${{ inputs.llama_commit }}
+          TAG: ${{ inputs.github_release_tag }}
+          XRIG_QUALIFY_MODEL: /opt/xrig-qualification/Qwen3.8-27B-UD-Q4_K_XL.gguf
+          XRIG_QUALIFY_MMPROJ: /opt/xrig-qualification/mmproj-F16.gguf
+          XRIG_QUALIFY_IMAGE: /opt/xrig-qualification/qualification.png
+        run: |
+          set -euo pipefail
+          cp profiles/rx7900xtx-rocm-gfx1100.yaml /tmp/profile.yaml
+          node - /tmp/profile.yaml "$COMMIT" <<'NODE'
+          const fs=require('fs');const p=JSON.parse(fs.readFileSync(process.argv[2]));p.source.commit=process.argv[3];fs.writeFileSync(process.argv[2],JSON.stringify(p));
+          NODE
+          scripts/build-runtime.sh /tmp/profile.yaml llama.cpp work
+          scripts/package-runtime.sh /tmp/profile.yaml work "$TAG" package
+          scripts/generate-stack-metadata.sh /tmp/profile.yaml "$TAG" package evidence
+          scripts/sign-artifact.sh "package/$(node scripts/profile.js /tmp/profile.yaml asset_prefix)-${TAG}.tar.gz"
+          scripts/sign-artifact.sh evidence/receipt.json
+          tests/qualify-rx7900xtx.sh "package/$(node scripts/profile.js /tmp/profile.yaml asset_prefix)-${TAG}.tar.gz" /opt/xrig-qualification/profile2.args > evidence/qualification.json
+          scripts/sign-artifact.sh evidence/qualification.json
+      - name: Create immutable GitHub Release
+        env: { GH_TOKEN: ${{ github.token }}, TAG: ${{ inputs.github_release_tag }} }
+        run: gh release create "$TAG" package/*.tar.gz package/*.tar.gz.sig package/*.sha256 evidence/receipt.json evidence/receipt.json.sig evidence/qualification.json evidence/qualification.json.sig evidence/runtime-closure.txt --title "RX 7900 XTX (ROCm gfx1100) — $TAG" --generate-notes
