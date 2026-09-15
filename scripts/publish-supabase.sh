@@ -9,7 +9,7 @@ receipt_dir=${4:?usage: publish-supabase.sh PROFILE RELEASE_TAG PROFILE_REVISION
 config=${5:?usage: publish-supabase.sh PROFILE RELEASE_TAG PROFILE_REVISION RECEIPT_DIR CONFIG_JSON}
 [[ "$revision" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]{0,95}$ ]] || { echo 'profile revision must be readable and immutable' >&2; exit 2; }
 node scripts/profile.js "$profile" >/dev/null
-[[ -n ${SUPABASE_URL:-} && -n ${SUPABASE_SERVICE_ROLE_KEY:-} && -n ${GITHUB_REPOSITORY:-} && -n ${GH_TOKEN:-} ]] || { echo 'SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GITHUB_REPOSITORY, and GH_TOKEN are required' >&2; exit 2; }
+[[ -n ${SUPABASE_URL:-} && -n ${SUPABASE_SERVICE_ROLE_KEY:-} && -n ${GITHUB_REPOSITORY:-} ]] || { echo 'SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and GITHUB_REPOSITORY are required' >&2; exit 2; }
 receipt="$receipt_dir/receipt.json"; qualification="$receipt_dir/qualification.json"; [[ -f "$receipt" && -f "$receipt.sig" && -f "$qualification" && -f "$config" ]] || { echo 'receipt, signature, qualification, and config are required' >&2; exit 1; }
 scripts/verify-artifact.sh "$receipt" "$receipt.sig"
 commit=$(node -e 'const x=require(require("path").resolve(process.argv[1])); if(!/^[a-f0-9]{40}$/.test(x.llama_commit))throw Error("bad receipt source"); console.log(x.llama_commit)' "$receipt")
@@ -24,13 +24,14 @@ asset=$(node -e 'console.log(require(require("path").resolve(process.argv[1])).r
 github_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/${asset}"
 github_sig="${github_url}.sig"
 work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
-# Verify the immutable release asset inventory through GitHub's API. This is
-# more reliable than probing CDN redirect URLs from an Actions runner and still
-# occurs before any Supabase write.
-curl -fsS --retry 4 --retry-all-errors --retry-delay 2 -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" -o "$work/release.json"
-node - "$work/release.json" "$asset" "${asset}.sig" <<'NODE'
-const fs=require('fs');const [f,runtime,sig]=process.argv.slice(2);const x=JSON.parse(fs.readFileSync(f));const names=new Set((x.assets||[]).map(a=>a.name));if(!names.has(runtime)||!names.has(sig))throw Error('GitHub Release lacks the required runtime asset or signature');
-NODE
+# The workflow's authenticated release download is the asset-inventory check.
+# Verify its exact runtime bytes and detached signature locally before any
+# Supabase write; do not depend on redirect/CDN behavior in this environment.
+[[ -f "$receipt_dir/$asset" && -f "$receipt_dir/$asset.sig" ]] || { echo 'release evidence lacks the required runtime asset or signature' >&2; exit 1; }
+runtime_sha=$(sha256sum "$receipt_dir/$asset" | awk '{print $1}')
+receipt_sha=$(node -e 'console.log(require(require("path").resolve(process.argv[1])).runtime.sha256)' "$receipt")
+[[ "$runtime_sha" == "$receipt_sha" ]] || { echo 'downloaded runtime hash differs from signed receipt' >&2; exit 1; }
+scripts/verify-artifact.sh "$receipt_dir/$asset" "$receipt_dir/$asset.sig"
 stack=$(node scripts/profile.js "$profile" stack_id); version=$(node -e 'console.log(require(require("path").resolve(process.argv[1])).release_version)' "$receipt")
 node - "$profile" "$receipt" "$github_url" "$github_sig" "$work/descriptor.json" <<'NODE'
 const fs=require('fs'); const p=JSON.parse(fs.readFileSync(process.argv[2])); const r=JSON.parse(fs.readFileSync(process.argv[3])); const [url,sig,out]=process.argv.slice(4);
