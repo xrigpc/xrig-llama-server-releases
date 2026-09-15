@@ -38,16 +38,36 @@ base="${SUPABASE_URL%/}/storage/v1/object/xrig-configs"
 put() { curl -fsS -X POST -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H 'x-upsert: false' --data-binary @"$2" "$base/$1" >/dev/null; }
 # Immutable objects first. A failed write ends before any active catalogue change.
 put "stacks/v1/${stack}-${version}.json" "$work/descriptor.json"; put "stacks/v1/${stack}-${version}.json.sig" "$work/descriptor.json.sig"
-scripts/sign-artifact.sh "$config" "$work/config.sig"; put "configs/qwen3.8-27b-rx7900xtx-rocm-profile2/${revision}.json" "$config"; put "configs/qwen3.8-27b-rx7900xtx-rocm-profile2/${revision}.json.sig" "$work/config.sig"
 public="${SUPABASE_URL%/}/storage/v1/object/public/xrig-configs"
-curl -fsS "$public/stacks/v1/index.json" -o "$work/index.json"; curl -fsS "$public/stacks/v1/index.json.sig" -o "$work/index.json.sig"; scripts/verify-artifact.sh "$work/index.json" "$work/index.json.sig"
+get_public_or_initial() {
+  local object=$1 output=$2 initial=$3 status
+  status=$(curl -sS -o "$output" -w '%{http_code}' "$public/$object")
+  if [[ "$status" == 200 ]]; then return 0; fi
+  [[ "$status" == 400 || "$status" == 404 ]] && node - "$output" <<'NODE'
+const fs=require('fs'); const x=JSON.parse(fs.readFileSync(process.argv[2]));
+if(!/not.?found|object/i.test(JSON.stringify(x))) process.exit(1);
+NODE
+  printf '%s\n' "$initial" > "$output"
+}
+index_status=$(curl -sS -o "$work/index.json" -w '%{http_code}' "$public/stacks/v1/index.json")
+if [[ "$index_status" == 200 ]]; then
+  curl -fsS "$public/stacks/v1/index.json.sig" -o "$work/index.json.sig"
+  scripts/verify-artifact.sh "$work/index.json" "$work/index.json.sig"
+else
+  [[ "$index_status" == 400 || "$index_status" == 404 ]] && node - "$work/index.json" <<'NODE'
+const fs=require('fs'); const x=JSON.parse(fs.readFileSync(process.argv[2]));
+if(!/not.?found|object/i.test(JSON.stringify(x))) process.exit(1);
+NODE
+  printf '%s\n' '{"schema_version":1,"stacks":[]}' > "$work/index.json"
+fi
 descriptor_url="$public/stacks/v1/${stack}-${version}.json"; descriptor_sha=$(sha256sum "$work/descriptor.json" | awk '{print $1}'); descriptor_size=$(stat -c %s "$work/descriptor.json")
 node - "$work/index.json" "$stack" "$version" "$descriptor_url" "$descriptor_sha" "$descriptor_size" <<'NODE'
 const fs=require('fs');const [f,stack,version,url,sha,size]=process.argv.slice(2);const x=JSON.parse(fs.readFileSync(f));if(!Array.isArray(x.stacks))throw Error('invalid stack index');if(x.stacks.some(e=>e.stack_id===stack&&e.version===version))throw Error('stack version already exists');x.stacks.push({stack_id:stack,version,descriptor_url:url,signature_url:url+'.sig',sha256:sha,size_bytes:Number(size)});fs.writeFileSync(f,JSON.stringify(x,null,2)+'\n');
 NODE
 scripts/sign-artifact.sh "$work/index.json"; curl -fsS -X POST -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H 'x-upsert: true' --data-binary @"$work/index.json" "$base/stacks/v1/index.json" >/dev/null; curl -fsS -X POST -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H 'x-upsert: true' --data-binary @"$work/index.json.sig" "$base/stacks/v1/index.json.sig" >/dev/null
+scripts/sign-artifact.sh "$config" "$work/config.sig"; put "configs/qwen3.8-27b-rx7900xtx-rocm-profile2/${revision}.json" "$config"; put "configs/qwen3.8-27b-rx7900xtx-rocm-profile2/${revision}.json.sig" "$work/config.sig"
 # The catalogue is the only active mutable selection, so it is always last.
-curl -fsS "$public/catalogues/v2/index.json" -o "$work/catalogue.json"
+get_public_or_initial "catalogues/v2/index.json" "$work/catalogue.json" '[]'
 config_sha=$(sha256sum "$config" | awk '{print $1}'); config_url="$public/configs/qwen3.8-27b-rx7900xtx-rocm-profile2/${revision}.json"
 node - "$work/catalogue.json" "$revision" "$config_url" "$config_sha" <<'NODE'
 const fs=require('fs');const [f,v,url,sha]=process.argv.slice(2);let x=JSON.parse(fs.readFileSync(f));if(!Array.isArray(x))throw Error('invalid catalogue');x=x.filter(e=>e.id!=='qwen3.8-27b-rx7900xtx-rocm-profile2');x.push({id:'qwen3.8-27b-rx7900xtx-rocm-profile2',config_version:v,schema_version:2,status:'stable',vendor:'amd',gpu_tags:['RX 7900 XTX'],os:['linux'],backend:'rocm',min_vram_gb:24,min_ram_gb:30,config_url:url,config_sha256:sha,updated_at:new Date().toISOString(),is_active:true,gpu_profile:'linux-amd-rx7900xtx-rocm-gfx1100',is_factory_default:true});fs.writeFileSync(f,JSON.stringify(x,null,2)+'\n');
