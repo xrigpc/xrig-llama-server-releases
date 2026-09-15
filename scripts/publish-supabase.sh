@@ -23,7 +23,11 @@ NODE
 asset=$(node -e 'console.log(require(require("path").resolve(process.argv[1])).runtime.asset_name)' "$receipt")
 github_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/${asset}"
 github_sig="${github_url}.sig"
-curl -fsSI "$github_url" >/dev/null; curl -fsSI "$github_sig" >/dev/null
+# GitHub release assets can be briefly unavailable through an edge immediately
+# after release creation. Retry this read-only preflight before any Supabase
+# write; a failed preflight leaves the active catalogue untouched.
+curl -fsSI --retry 4 --retry-all-errors --retry-delay 2 "$github_url" >/dev/null
+curl -fsSI --retry 4 --retry-all-errors --retry-delay 2 "$github_sig" >/dev/null
 work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
 stack=$(node scripts/profile.js "$profile" stack_id); version=$(node -e 'console.log(require(require("path").resolve(process.argv[1])).release_version)' "$receipt")
 node - "$profile" "$receipt" "$github_url" "$github_sig" "$work/descriptor.json" <<'NODE'
