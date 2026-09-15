@@ -31,9 +31,11 @@ jobs:
           XRIG_ED25519_PRIVATE_KEY_B64: ${{ secrets.XRIG_ED25519_PRIVATE_KEY_B64 }}
           COMMIT: ${{ inputs.llama_commit }}
           TAG: ${{ inputs.github_release_tag }}
-          XRIG_QUALIFY_MODEL: /opt/xrig-qualification/Qwen3.8-27B-UD-Q4_K_XL.gguf
-          XRIG_QUALIFY_MMPROJ: /opt/xrig-qualification/mmproj-F16.gguf
-          XRIG_QUALIFY_IMAGE: /opt/xrig-qualification/qualification.png
+          XRIG_QUALIFY_MODEL: /home/xrig/.xrig-qualification/Qwen3.8-27B-UD-Q4_K_XL.gguf
+          XRIG_QUALIFY_MMPROJ: /home/xrig/.xrig-qualification/mmproj-F16.gguf
+          XRIG_QUALIFY_IMAGE: /home/xrig/.xrig-qualification/qualification.jpg
+          XRIG_QUALIFY_ROCMINFO: ${{ github.workspace }}/work/rocm/bin/rocminfo
+          XRIG_QUALIFY_ROCM_LIB: "${{ github.workspace }}/work/rocm/lib:${{ github.workspace }}/work/rocm/lib64"
         run: |
           set -euo pipefail
           cp profiles/rx7900xtx-rocm-gfx1100.yaml /tmp/profile.yaml
@@ -45,7 +47,7 @@ jobs:
           scripts/generate-stack-metadata.sh /tmp/profile.yaml "$TAG" package evidence
           scripts/sign-artifact.sh "package/$(node scripts/profile.js /tmp/profile.yaml asset_prefix)-${TAG}.tar.gz"
           scripts/sign-artifact.sh evidence/receipt.json
-          tests/qualify-rx7900xtx.sh "package/$(node scripts/profile.js /tmp/profile.yaml asset_prefix)-${TAG}.tar.gz" /opt/xrig-qualification/profile2.args > evidence/qualification.json
+          tests/qualify-rx7900xtx.sh "package/$(node scripts/profile.js /tmp/profile.yaml asset_prefix)-${TAG}.tar.gz" tests/profile2.args > evidence/qualification.json
           scripts/sign-artifact.sh evidence/qualification.json
       - name: Create immutable GitHub Release
         env:

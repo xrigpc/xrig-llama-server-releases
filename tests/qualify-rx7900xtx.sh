@@ -7,9 +7,10 @@ args=${2:?usage: qualify-rx7900xtx.sh RUNTIME_ARCHIVE PROFILE2_ARGUMENTS_FILE}
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT; tar -xzf "$archive" -C "$tmp"
 bin="$tmp/runtime/bin/llama-server"; [[ -x "$bin" ]]; readelf -d "$bin" | grep -E '(RPATH|RUNPATH)' && exit 1 || true
 [[ -s "$args" ]] || exit 1; grep -q -- '--ctx-size 124416\|--ctx-size=124416' "$args"
-grep -q 'gfx1100' <(ROCR_VISIBLE_DEVICES=0 rocminfo 2>/dev/null)
+rocm_info=${XRIG_QUALIFY_ROCMINFO:-rocminfo}
+grep -q 'gfx1100' <(ROCR_VISIBLE_DEVICES=0 "$rocm_info" 2>/dev/null)
 mapfile -t argv < "$args"
-ROCR_VISIBLE_DEVICES=0 LD_LIBRARY_PATH="$tmp/runtime/bin" "$bin" --model "$XRIG_QUALIFY_MODEL" --mmproj "$XRIG_QUALIFY_MMPROJ" "${argv[@]}" >"$tmp/server.log" 2>&1 & pid=$!
+ROCR_VISIBLE_DEVICES=0 LD_LIBRARY_PATH="$tmp/runtime/bin:${XRIG_QUALIFY_ROCM_LIB:-}" "$bin" --model "$XRIG_QUALIFY_MODEL" --mmproj "$XRIG_QUALIFY_MMPROJ" "${argv[@]}" >"$tmp/server.log" 2>&1 & pid=$!
 trap 'kill "$pid" 2>/dev/null || true; rm -rf "$tmp"' EXIT
 for _ in $(seq 1 60); do curl -fsS http://127.0.0.1:8088/health >"$tmp/health.json" && break; sleep 1; done
 grep -q . "$tmp/health.json"
