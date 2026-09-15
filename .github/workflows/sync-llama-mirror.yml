@@ -30,10 +30,17 @@ jobs:
           COMMIT: ${{ steps.source.outputs.commit }}
         run: |
           set -euo pipefail
-          git clone --mirror https://github.com/ggml-org/llama.cpp.git mirror.git
+          git init -q mirror.git
+          git -C mirror.git fetch -q --depth=1 https://github.com/ggml-org/llama.cpp.git "$COMMIT"
           git -C mirror.git cat-file -e "$COMMIT^{commit}"
+          git -C mirror.git branch -f main FETCH_HEAD
           git -C mirror.git remote add xrig "https://x-access-token:${MIRROR_TOKEN}@github.com/xrigpc/llama.cpp.git"
-          git -C mirror.git push xrig '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'
+          git -C mirror.git push xrig refs/heads/main:refs/heads/main
           short=${COMMIT:0:12}; tag="xrig-approved/rx7900xtx-rocm-gfx1100/llama-${short}"
-          git -C mirror.git tag -a "$tag" "$COMMIT" -m "XRIG approved RX 7900 XTX (ROCm gfx1100) source $COMMIT"
-          git -C mirror.git push xrig "refs/tags/$tag"
+          existing="$(git -C mirror.git ls-remote xrig "refs/tags/${tag}^{}" | awk '{print $1}')"
+          if [[ -n "$existing" ]]; then
+            [[ "$existing" == "$COMMIT" ]] || { echo "existing approval tag points at a different source commit" >&2; exit 1; }
+          else
+            git -C mirror.git tag -a "$tag" "$COMMIT" -m "XRIG approved RX 7900 XTX (ROCm gfx1100) source $COMMIT"
+            git -C mirror.git push xrig "refs/tags/$tag"
+          fi
