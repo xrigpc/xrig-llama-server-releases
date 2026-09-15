@@ -17,7 +17,6 @@ jobs:
           COMMIT: ${{ inputs.llama_commit }}
           REVISION: ${{ inputs.release_revision }}
           TAG: ${{ inputs.github_release_tag }}
-          CMAKE_BIN: /home/xrig/.local/cmake/bin/cmake
         run: |
           set -euo pipefail
           [[ "$COMMIT" =~ ^[a-f0-9]{40}$ && "$REVISION" =~ ^[1-9][0-9]*$ ]]
@@ -32,6 +31,7 @@ jobs:
           XRIG_ED25519_PRIVATE_KEY_B64: ${{ secrets.XRIG_ED25519_PRIVATE_KEY_B64 }}
           COMMIT: ${{ inputs.llama_commit }}
           TAG: ${{ inputs.github_release_tag }}
+          CMAKE_BIN: /home/xrig/.local/cmake/bin/cmake
           XRIG_QUALIFY_MODEL: /home/xrig/.xrig-qualification/Qwen3.8-27B-UD-Q4_K_XL.gguf
           XRIG_QUALIFY_MMPROJ: /home/xrig/.xrig-qualification/mmproj-F16.gguf
           XRIG_QUALIFY_IMAGE: /home/xrig/.xrig-qualification/qualification.jpg
