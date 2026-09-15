@@ -25,3 +25,5 @@ ROCM_PATH="$hip_root" HIP_PATH="$hip_root" HIPCXX="$clang" "$cmake_bin" -S "$sou
 mkdir "$out/runtime"; cp -a "$build/bin/." "$out/runtime/"
 [[ -x "$out/runtime/llama-server" ]] || { echo 'llama-server was not built' >&2; exit 1; }
 if readelf -d "$out/runtime/llama-server" | grep -E '(RPATH|RUNPATH)' >/dev/null; then echo 'host RPATH is forbidden' >&2; exit 1; fi
+echo 'portable runtime build completed'
+exit 0
