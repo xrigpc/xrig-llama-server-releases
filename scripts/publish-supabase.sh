@@ -42,9 +42,20 @@ const d={schema_version:1,stack_id:p.stack_id,version:r.release_version,os:'linu
 NODE
 scripts/sign-artifact.sh "$work/descriptor.json"
 base="${SUPABASE_URL%/}/storage/v1/object/xrig-configs"
-put() { curl -fsS -X POST -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H 'x-upsert: false' --data-binary @"$2" "$base/$1" >/dev/null; }
+put_immutable() {
+  local object=$1 input=$2 status existing
+  status=$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H 'x-upsert: false' --data-binary @"$input" "$base/$object")
+  [[ "$status" =~ ^2 ]] && return 0
+  # A prior interrupted run may already have created this immutable object.
+  # Resume only if its public bytes are exactly the bytes this run generated.
+  existing="$work/existing-$(basename "$object")"
+  status=$(curl -sS -o "$existing" -w '%{http_code}' "${SUPABASE_URL%/}/storage/v1/object/public/xrig-configs/$object")
+  [[ "$status" == 200 ]] && cmp -s "$input" "$existing" && return 0
+  echo "immutable Supabase object write failed or conflicts: $object" >&2
+  return 1
+}
 # Immutable objects first. A failed write ends before any active catalogue change.
-put "stacks/v1/${stack}-${version}.json" "$work/descriptor.json"; put "stacks/v1/${stack}-${version}.json.sig" "$work/descriptor.json.sig"
+put_immutable "stacks/v1/${stack}-${version}.json" "$work/descriptor.json"; put_immutable "stacks/v1/${stack}-${version}.json.sig" "$work/descriptor.json.sig"
 public="${SUPABASE_URL%/}/storage/v1/object/public/xrig-configs"
 get_public_or_initial() {
   local object=$1 output=$2 initial=$3 status
@@ -72,7 +83,7 @@ node - "$work/index.json" "$stack" "$version" "$descriptor_url" "$descriptor_sha
 const fs=require('fs');const [f,stack,version,url,sha,size]=process.argv.slice(2);const x=JSON.parse(fs.readFileSync(f));if(!Array.isArray(x.stacks))throw Error('invalid stack index');if(x.stacks.some(e=>e.stack_id===stack&&e.version===version))throw Error('stack version already exists');x.stacks.push({stack_id:stack,version,descriptor_url:url,signature_url:url+'.sig',sha256:sha,size_bytes:Number(size)});fs.writeFileSync(f,JSON.stringify(x,null,2)+'\n');
 NODE
 scripts/sign-artifact.sh "$work/index.json"; curl -fsS -X POST -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H 'x-upsert: true' --data-binary @"$work/index.json" "$base/stacks/v1/index.json" >/dev/null; curl -fsS -X POST -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H 'x-upsert: true' --data-binary @"$work/index.json.sig" "$base/stacks/v1/index.json.sig" >/dev/null
-scripts/sign-artifact.sh "$config" "$work/config.sig"; put "configs/qwen3.8-27b-rx7900xtx-rocm-profile2/${revision}.json" "$config"; put "configs/qwen3.8-27b-rx7900xtx-rocm-profile2/${revision}.json.sig" "$work/config.sig"
+scripts/sign-artifact.sh "$config" "$work/config.sig"; put_immutable "configs/qwen3.8-27b-rx7900xtx-rocm-profile2/${revision}.json" "$config"; put_immutable "configs/qwen3.8-27b-rx7900xtx-rocm-profile2/${revision}.json.sig" "$work/config.sig"
 # The catalogue is the only active mutable selection, so it is always last.
 get_public_or_initial "catalogues/v2/index.json" "$work/catalogue.json" '[]'
 config_sha=$(sha256sum "$config" | awk '{print $1}'); config_url="$public/configs/qwen3.8-27b-rx7900xtx-rocm-profile2/${revision}.json"
