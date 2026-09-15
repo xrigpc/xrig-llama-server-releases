@@ -1,5 +1,5 @@
 name: Sync llama.cpp mirror
-on:
+"on":
   workflow_dispatch:
     inputs:
       llama_commit:

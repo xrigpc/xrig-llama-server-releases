@@ -1,5 +1,5 @@
 name: Publish Profile — RX 7900 XTX (ROCm gfx1100)
-on:
+"on":
   workflow_dispatch:
     inputs:
       github_release_tag: { description: Completed XTX GitHub Release tag, required: true, type: string }

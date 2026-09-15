@@ -1,5 +1,5 @@
 name: Build & Release — RX 7900 XTX (ROCm gfx1100)
-on:
+"on":
   workflow_dispatch:
     inputs:
       llama_commit: { description: Exact approved 40-character SHA, required: true, type: string }
