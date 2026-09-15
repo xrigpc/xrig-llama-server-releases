@@ -12,7 +12,7 @@ node scripts/profile.js "$profile" >/dev/null
 [[ -n ${SUPABASE_URL:-} && -n ${SUPABASE_SERVICE_ROLE_KEY:-} && -n ${GITHUB_REPOSITORY:-} ]] || { echo 'SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and GITHUB_REPOSITORY are required' >&2; exit 2; }
 receipt="$receipt_dir/receipt.json"; qualification="$receipt_dir/qualification.json"; [[ -f "$receipt" && -f "$receipt.sig" && -f "$qualification" && -f "$config" ]] || { echo 'receipt, signature, qualification, and config are required' >&2; exit 1; }
 scripts/verify-artifact.sh "$receipt" "$receipt.sig"
-commit=$(node -e 'const x=require(process.argv[1]); if(!/^[a-f0-9]{40}$/.test(x.llama_commit))throw Error("bad receipt source"); console.log(x.llama_commit)' "$receipt")
+commit=$(node -e 'const x=require(require("path").resolve(process.argv[1])); if(!/^[a-f0-9]{40}$/.test(x.llama_commit))throw Error("bad receipt source"); console.log(x.llama_commit)' "$receipt")
 scripts/verify-source.sh "$profile" "$commit"
 node - "$profile" "$receipt" "$qualification" "$config" "$revision" <<'NODE'
 const fs=require('fs'); const p=JSON.parse(fs.readFileSync(process.argv[2])); const r=JSON.parse(fs.readFileSync(process.argv[3])); const q=JSON.parse(fs.readFileSync(process.argv[4])); const c=JSON.parse(fs.readFileSync(process.argv[5])); const rev=process.argv[6];
@@ -20,12 +20,12 @@ const die=x=>{throw Error(x)}; if(r.therock.url!==p.therock.url||r.therock.sha25
 if(!q.health||!q.text_inference||!q.vision_projector||q.rocr_visible_devices!=='0'||q.gpu_arch!=='gfx1100'||!q.profile2_arguments_match)die('qualification receipt is incomplete');
 if(c.id!=='qwen3.8-27b-rx7900xtx-rocm-profile2'||c.version!==rev||c.runtime?.ref?.stack_id!==p.stack_id||c.runtime.ref.version!==r.release_version)die('config runtime reference or revision mismatch');
 NODE
-asset=$(node -e 'console.log(require(process.argv[1]).runtime.asset_name)' "$receipt")
+asset=$(node -e 'console.log(require(require("path").resolve(process.argv[1])).runtime.asset_name)' "$receipt")
 github_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/${asset}"
 github_sig="${github_url}.sig"
 curl -fsSI "$github_url" >/dev/null; curl -fsSI "$github_sig" >/dev/null
 work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
-stack=$(node scripts/profile.js "$profile" stack_id); version=$(node -e 'console.log(require(process.argv[1]).release_version)' "$receipt")
+stack=$(node scripts/profile.js "$profile" stack_id); version=$(node -e 'console.log(require(require("path").resolve(process.argv[1])).release_version)' "$receipt")
 node - "$profile" "$receipt" "$github_url" "$github_sig" "$work/descriptor.json" <<'NODE'
 const fs=require('fs'); const p=JSON.parse(fs.readFileSync(process.argv[2])); const r=JSON.parse(fs.readFileSync(process.argv[3])); const [url,sig,out]=process.argv.slice(4);
 const closure=fs.readFileSync(require('path').join(require('path').dirname(process.argv[3]),'runtime-closure.txt'),'utf8').trim().split('\n').filter(Boolean).map(x=>({path:'runtime/bin/'+x,sha256:'closure-hash-recorded-in-build-receipt'}));
