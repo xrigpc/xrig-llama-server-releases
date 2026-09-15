@@ -6,7 +6,8 @@ args=${2:?usage: qualify-rx7900xtx.sh RUNTIME_ARCHIVE PROFILE2_ARGUMENTS_FILE}
 [[ -n ${XRIG_QUALIFY_MODEL:-} && -n ${XRIG_QUALIFY_MMPROJ:-} && -n ${XRIG_QUALIFY_IMAGE:-} ]] || { echo 'qualification model, projector, and image paths are required' >&2; exit 2; }
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT; tar -xzf "$archive" -C "$tmp"
 bin="$tmp/runtime/bin/llama-server"; [[ -x "$bin" ]]; readelf -d "$bin" | grep -E '(RPATH|RUNPATH)' && exit 1 || true
-[[ -s "$args" ]] || exit 1; grep -q -- '--ctx-size 124416\|--ctx-size=124416' "$args"
+[[ -s "$args" ]] || exit 1
+awk 'seen && $0 == "124416" { found=1 } $0 == "--ctx-size" { seen=1; next } { seen=0 } END { exit !found }' "$args"
 rocm_info=${XRIG_QUALIFY_ROCMINFO:-rocminfo}
 grep -q 'gfx1100' <(ROCR_VISIBLE_DEVICES=0 "$rocm_info" 2>/dev/null)
 mapfile -t argv < "$args"
