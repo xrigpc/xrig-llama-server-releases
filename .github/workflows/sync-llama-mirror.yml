@@ -16,7 +16,8 @@ jobs:
     steps:
       - name: Resolve selected upstream commit
         id: source
-        env: { INPUT_COMMIT: ${{ inputs.llama_commit }} }
+        env:
+          INPUT_COMMIT: ${{ inputs.llama_commit }}
         run: |
           set -euo pipefail
           commit="$INPUT_COMMIT"
@@ -24,7 +25,9 @@ jobs:
           [[ "$commit" =~ ^[a-f0-9]{40}$ ]]
           echo "commit=$commit" >> "$GITHUB_OUTPUT"
       - name: Mirror clean upstream ref and tag approved XTX candidate
-        env: { MIRROR_TOKEN: ${{ secrets.XRIG_MIRROR_TOKEN }}, COMMIT: ${{ steps.source.outputs.commit }} }
+        env:
+          MIRROR_TOKEN: ${{ secrets.XRIG_MIRROR_TOKEN }}
+          COMMIT: ${{ steps.source.outputs.commit }}
         run: |
           set -euo pipefail
           git clone --mirror https://github.com/ggml-org/llama.cpp.git mirror.git

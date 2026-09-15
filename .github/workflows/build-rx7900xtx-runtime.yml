@@ -13,14 +13,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Validate inputs and candidate name
-        env: { COMMIT: ${{ inputs.llama_commit }}, REVISION: ${{ inputs.release_revision }}, TAG: ${{ inputs.github_release_tag }} }
+        env:
+          COMMIT: ${{ inputs.llama_commit }}
+          REVISION: ${{ inputs.release_revision }}
+          TAG: ${{ inputs.github_release_tag }}
         run: |
           set -euo pipefail
           [[ "$COMMIT" =~ ^[a-f0-9]{40}$ && "$REVISION" =~ ^[1-9][0-9]*$ ]]
           expected="rx7900xtx-rocm-gfx1100-llama-${COMMIT:0:12}-rocm-7.14.0a20260612-v${REVISION}"
           [[ "$TAG" == "$expected" ]] || { echo "tag must be $expected" >&2; exit 1; }
       - name: Clone verified clean mirror checkout
-        env: { COMMIT: ${{ inputs.llama_commit }} }
+        env:
+          COMMIT: ${{ inputs.llama_commit }}
         run: git clone https://github.com/xrigpc/llama.cpp.git llama.cpp && git -C llama.cpp checkout --detach "$COMMIT"
       - name: Build, package, receipt, and signatures
         env:
@@ -44,5 +48,7 @@ jobs:
           tests/qualify-rx7900xtx.sh "package/$(node scripts/profile.js /tmp/profile.yaml asset_prefix)-${TAG}.tar.gz" /opt/xrig-qualification/profile2.args > evidence/qualification.json
           scripts/sign-artifact.sh evidence/qualification.json
       - name: Create immutable GitHub Release
-        env: { GH_TOKEN: ${{ github.token }}, TAG: ${{ inputs.github_release_tag }} }
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.github_release_tag }}
         run: gh release create "$TAG" package/*.tar.gz package/*.tar.gz.sig package/*.sha256 evidence/receipt.json evidence/receipt.json.sig evidence/qualification.json evidence/qualification.json.sig evidence/runtime-closure.txt --title "RX 7900 XTX (ROCm gfx1100) — $TAG" --generate-notes

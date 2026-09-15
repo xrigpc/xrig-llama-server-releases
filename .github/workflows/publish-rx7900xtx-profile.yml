@@ -12,10 +12,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Download release evidence
-        env: { GH_TOKEN: ${{ github.token }}, TAG: ${{ inputs.github_release_tag }} }
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.github_release_tag }}
         run: mkdir evidence && gh release download "$TAG" --dir evidence --pattern 'receipt.json*' --pattern 'qualification.json*' --pattern 'runtime-closure.txt'
       - name: Create pinned immutable config revision
-        env: { TAG: ${{ inputs.github_release_tag }}, REVISION: ${{ inputs.profile_revision }} }
+        env:
+          TAG: ${{ inputs.github_release_tag }}
+          REVISION: ${{ inputs.profile_revision }}
         run: |
           node - configs/qwen3.8-27b-rx7900xtx-rocm-profile2.json "$TAG" "$REVISION" <<'NODE'
           const fs=require('fs');const p=process.argv[2],tag=process.argv[3],revision=process.argv[4];const c=JSON.parse(fs.readFileSync(p));c.version=revision;c.runtime.ref.version=tag;fs.mkdirSync('out',{recursive:true});fs.writeFileSync('out/config.json',JSON.stringify(c,null,2)+'\n');
