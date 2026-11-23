@@ -1,5 +1,5 @@
 {
   "name": "xrig-llama-server-releases",
   "private": true,
-  "scripts": { "test": "node tests/profile.test.js" }
+  "scripts": { "test": "node tests/profile.test.js && node tests/stack-limits.test.js" }
 }
